@@ -7,6 +7,14 @@
 
 #include <vector>
 
+/// 1) This appears to work expect that the ball will not bounce off the walls 
+/// and bats. Apparently, it to do with the storing the before x, y ball values.
+/// But I've done that and stored the fElapsedTime and then reversed the ball
+/// and done the calculation, and nothing much changes, so I think there is another problem.
+/// 2) Also, the NewBall method always sends the ball into the top-left of the screen??
+/// 3) I'm not convinced that the random number generator is adequate enough.
+
+
 // Override base class with your custom functionality
 class Example : public olc::PixelGameEngine
 {
@@ -25,22 +33,29 @@ public:
 	int scorePlayer1{ 0 };
 	int scorePlayer2{ 0 };
 
-	struct sphere {
+	struct sphere
+	{
 		int x;
 		int y;
 		float dx;
 		float dy;
 		int radius;
+
+		float px;
+		float py;
+		float et;
 	};
 
 	sphere ball;
 
-	struct line {
+	struct line
+	{
 		olc::vi2d start;
 		olc::vi2d end;
 	};
 
-	std::vector <line> court{
+	std::vector <line> court
+	{
 		{{0,0},{ScreenWidth(),0}}, // Top
 		{{0,ScreenHeight() - 1},{ScreenWidth(),ScreenHeight() - 1}}, // Bottom
 		{{0,0},{0,1}}, // Top-Left
@@ -49,22 +64,31 @@ public:
 		{{ScreenWidth() - 1,ScreenHeight() - 1},{ScreenWidth() - 1,ScreenHeight() - 2}}, // Bottom-Right
 	};
 
-	std::vector <line> goals{
+	std::vector <line> goals
+	{
 		{{0,1}, {0,ScreenHeight() - 2}}, // Player 1 goal
 		{{ScreenWidth() - 1,1}, {ScreenWidth() - 1,ScreenHeight() - 2}}, // Player 2 goal
 	};
+
+protected: // Sound Specific
+	olc::sound::WaveEngine engine;
+
+	olc::sound::Wave bang;
 
 	// *****************************************************************
 public:
 	bool OnUserCreate() override
 	{
 		NewBall();
-		ball.radius = 2;
+
+		bang.LoadAudioWaveform("Pong.wav");
+		engine.InitialiseAudio(44100, 2);
 
 		return true;
 	}
 
-	void NewBall() {
+	void NewBall()
+	{
 		// Reset to start location
 		ball.x = (ScreenWidth() / 2);
 		ball.y = (ScreenHeight() / 2);
@@ -76,8 +100,9 @@ public:
 		int angle = GetRandInt(1, 359);
 
 		// convert the angle into radians and use as a velocity
-		ball.dx = sin(angle * (22 / 7));
-		ball.dy = cos(angle * (22 / 7));
+		ball.dx = cos(angle * (22/7));
+		ball.dy = sin(angle * (22 / 7));
+
 		ball.radius = 2;
 	}
 
@@ -105,6 +130,7 @@ public:
 			DrawLine(l.start, l.end, olc::YELLOW);
 		}*/
 	}
+
 	void MovePlayer1()
 	{
 		// Get Bats inputs
@@ -132,6 +158,7 @@ public:
 		// Draw the Bats
 		DrawLine({ player1.x , player1.y - batSize }, { player1.x , player1.y + batSize }, olc::RED);
 	}
+
 	void MovePlayer2()
 	{
 		// Right Player2
@@ -163,7 +190,8 @@ public:
 	}
 
 	// vvvvvvvvvvvvvvvv Collision Detection vvvvvvvvvvvvvvvvvvvvvvvv
-	bool pointCircle(float px, float py, float cx, float cy, float r) {
+	bool pointCircle(float px, float py, float cx, float cy, float r)
+	{
 		// get distance between the point and circle's center
 		// using the Pythagorean Theorem
 		float distX = px - cx;
@@ -213,11 +241,16 @@ public:
 		if (distX <= 0.0f)
 		{
 			ball.dx = ball.dx * -1;
+			ball.x = ball.px;
 		}
+
 		if (distY <= 0.0f)
 		{
 			ball.dy = ball.dy * -1;
+			ball.y = ball.py;
 		}
+
+		engine.PlayWaveform(&bang);
 	}
 
 	bool CollisionDetection(line l, sphere b)
@@ -266,6 +299,11 @@ public:
 
 	void MoveBall(float fET)
 	{
+		// save previous location & speed
+		ball.px = ball.x;
+		ball.py = ball.y;
+		ball.et = fET;
+
 		// Move the Ball
 		ball.x = ball.x + (ball.dx * fET);
 		ball.y = ball.y + (ball.dy * fET);
@@ -274,7 +312,9 @@ public:
 		// Wall Collision Detection
 		for (auto l : court)
 		{
-			CollisionDetection(l, ball);
+			bool hit = CollisionDetection(l, ball);
+
+			if (hit) break;
 		}
 
 		// Bat Collision
@@ -313,6 +353,11 @@ public:
 		if (p1)
 		{
 			scorePlayer1 = scorePlayer1 + 1;
+			NewBall();
+		}
+
+		if (GetKey(olc::Key::B).bReleased)
+		{
 			NewBall();
 		}
 
